@@ -15,11 +15,13 @@
 .template-gino .sheet-footer{border-top-color:#c89b3c;color:#142437}
 @media(max-width:1200px){.editor-layout{grid-template-columns:1fr}.preview-wrap{margin-top:18px}.form-panel{position:static}}
 
-/* V3 - exact company stationery backgrounds + fully editable free text */
-.exact-sheet{background-size:100% 100%;background-repeat:no-repeat;background-position:center;padding:0!important;display:block!important;position:relative;overflow:hidden}
-.dynamic-content{position:absolute;inset:132px 72px 95px 72px;display:flex;flex-direction:column;direction:rtl;color:#111;font-family:Tahoma,Arial,sans-serif}
-.dynamic-content .quote-title{font-size:22px;margin:0 0 22px;text-align:center;text-decoration:underline;font-weight:700}
-.dynamic-content .client-block{margin:0 34% 12px 0;font-size:15px;line-height:1.8;min-height:70px}
+/* V4 - split stationery artwork (header / footer / signature) so it never overlaps the written data */
+.exact-sheet{padding:0!important;display:flex!important;flex-direction:column;position:relative;overflow:hidden}
+.sheet-header-img{width:100%;display:block;flex-shrink:0}
+.sheet-footer-img{width:100%;display:block;margin-top:auto;flex-shrink:0}
+.dynamic-content{flex:1;display:flex;flex-direction:column;direction:rtl;color:#111;font-family:Tahoma,Arial,sans-serif;padding:26px 54px 22px}
+.dynamic-content .quote-title{font-size:22px;margin:0 0 20px;text-align:center;text-decoration:underline;font-weight:700}
+.dynamic-content .client-block{margin:0 0 14px;font-size:15px;line-height:1.8}
 .dynamic-content .client-block p{margin:0}
 .exact-table{font-size:13px;margin:4px 0 0;border:2px solid #111}
 .exact-table th,.exact-table td{height:30px;padding:4px 5px;border:1px solid #111;background:#fff}
@@ -27,12 +29,14 @@
 .exact-table th:nth-child(2){width:38%}
 .exact-terms{font-size:15px;line-height:1.85;margin-top:24px}
 .exact-terms p{margin:2px 0;white-space:pre-wrap}
-.exact-date{font-size:15px;margin-top:10px;align-self:flex-start}
-.content-alex{inset:150px 85px 150px 85px}.content-alex .client-block{margin-right:45%}.content-alex .exact-table th{background:#d9eff5}.content-alex .exact-terms{margin-top:28px;font-weight:600}
-.content-gino{inset:145px 88px 120px 88px}.content-gino .client-block{margin-right:43%}.content-gino .exact-table th{background:#fff}.content-gino .exact-terms{margin-right:43%;margin-top:28px}
-.content-alwaad{inset:120px 75px 130px 75px}.content-alwaad .client-block{margin-right:38%}.content-alwaad .exact-table th{background:#eee}.content-alwaad .exact-terms{margin-top:28px}.content-alwaad .exact-date{margin-top:auto}
-.content-alhamd{inset:125px 75px 125px 75px}.content-alhamd .client-block{margin-right:44%}.content-alhamd .exact-table th{background:#dce5f1}.content-alhamd .exact-date{margin-top:auto}
-.content-imdad{inset:105px 100px 120px 100px}.content-imdad .quote-title{margin-right:auto;margin-left:auto}.content-imdad .client-block{margin:0 45% 10px 0;font-size:13px}.content-imdad .exact-table th{background:#aaa}.content-imdad .exact-terms{font-size:13px;line-height:1.7;margin-top:12px}.content-imdad .exact-date{position:absolute;top:-20px;right:0}
+.exact-date{font-size:15px;margin-top:14px;align-self:flex-start}
+.signature-block{align-self:flex-end;margin-top:18px}
+.signature-block img{display:block;max-width:210px;width:auto;height:auto}
+.content-alex .exact-table th{background:#d9eff5}.content-alex .exact-terms{margin-top:28px;font-weight:600}
+.content-gino .exact-table th{background:#fff}
+.content-alwaad .exact-table th{background:#eee}.content-alwaad .exact-terms{margin-top:28px}
+.content-alhamd .exact-table th{background:#dce5f1}
+.content-imdad .exact-table th{background:#aaa}.content-imdad .exact-terms{font-size:13px;line-height:1.7;margin-top:12px}
 .term-editor-list{display:grid;gap:8px;margin-bottom:16px}.term-editor{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start}.term-editor textarea{min-height:54px!important;margin:0}.check-label{display:flex!important;grid-template-columns:auto 1fr!important;align-items:center;justify-content:flex-start;gap:8px!important}.check-label input{width:auto!important}
 @media(max-width:700px){.dynamic-content{font-family:Tahoma,Arial,sans-serif}}
 
@@ -54,22 +58,12 @@
 @media(max-width:700px){.quote-navigation{width:100%}.nav-step-btn,.quote-navigation .back-btn{flex:1;justify-content:center}.current-template{order:-1;width:100%}}
 
 /* Exact company reference layouts supplied by the user */
-.exact-sheet{background-size:100% 100%;background-repeat:no-repeat;background-position:center}
-.content-3a{inset:255px 75px 115px 75px}
-.content-3a .quote-title{font-size:20px;margin-bottom:34px}
-.content-3a .client-block{margin-right:48%;font-size:14px;line-height:1.7}
+.content-3a .quote-title{font-size:20px;margin-bottom:24px}
+.content-3a .client-block{font-size:14px;line-height:1.7}
 .content-3a .exact-table{margin-top:8px;font-size:15px}
 .content-3a .exact-table th{background:#c79a00;color:#111}
 .content-3a .exact-table th:nth-child(2){width:47%}
 .content-3a .exact-table td,.content-3a .exact-table th{height:39px;padding:5px}
 .content-3a .exact-terms{font-size:15px;font-weight:700;margin-top:18px}
-.content-3a .exact-date{position:absolute;bottom:50px;right:0;font-weight:700}
+.content-3a .exact-date{font-weight:700}
 .template-3a .quote-summary{background:#c79a00;border:1px solid #111;padding:6px 12px;margin-top:0;text-align:center}
-
-/* Put editable content on clean paper panels while preserving the supplied letterhead/footer/logo artwork. */
-.dynamic-content{background:rgba(255,255,255,.94);padding:10px 14px;border-radius:2px}
-.content-alex{inset:165px 82px 145px 82px}
-.content-gino{inset:155px 80px 135px 80px}
-.content-alhamd{inset:170px 78px 130px 78px}
-.content-alwaad{inset:165px 72px 120px 72px}
-.content-imdad{inset:115px 95px 115px 95px}

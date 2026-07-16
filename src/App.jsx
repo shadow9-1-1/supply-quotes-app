@@ -173,7 +173,7 @@ function QuoteEditor({ company, branch, initialQuote, onBack, onPrevious, onNext
   const save = () => { onSave({...quote, total, purchaseTotal, updatedAt: new Date().toISOString()}); setStatus('تم الحفظ'); setTimeout(() => setStatus(''), 1800); };
   const downloadPDF = async () => {
     setStatus('جاري إنشاء PDF...');
-    const canvas = await html2canvas(printRef.current, { scale: 2.2, useCORS: true, backgroundColor: '#ffffff' });
+    const canvas = await html2canvas(printRef.current, { scale: 2.2, useCORS: true, backgroundColor: '#ffffff', foreignObjectRendering: true });
     const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pageWidth = 210, pageHeight = 297;
@@ -291,7 +291,8 @@ function QuoteTemplate({ meta, company, branch, quote, total }) {
   const rows = quote.items?.length ? quote.items : [{id:'blank'}];
   const showIndex = meta.showIndex;
   const formatDate = (value) => value ? value.split('-').reverse().join(' / ') : '';
-  return <div className="sheet-inner exact-sheet" style={{backgroundImage:`url(${meta.background})`}}>
+  return <div className="sheet-inner exact-sheet">
+    {meta.header && <img className="sheet-header-img" src={meta.header} alt="" />}
     <div className={`dynamic-content content-${branch.template}`}>
       <h1 className="quote-title">{company.id === 'imdad' && branch.template === 'imdad' ? 'عرض سعر' : 'عرض أسعار'}</h1>
       <div className="client-block">
@@ -314,7 +315,9 @@ function QuoteTemplate({ meta, company, branch, quote, total }) {
         {quote.notes && quote.notes.split('\n').filter(Boolean).map((line,index)=><p key={`n-${index}`}>{line}</p>)}
       </div>
       {quote.date && <div className="exact-date">{branch.template === 'imdad' ? 'التاريخ' : 'تحرير في'} : {formatDate(quote.date)}</div>}
+      {meta.signature && <div className="signature-block"><img src={meta.signature} alt="" /></div>}
     </div>
+    {meta.footer && <img className="sheet-footer-img" src={meta.footer} alt="" />}
   </div>;
 }
 
