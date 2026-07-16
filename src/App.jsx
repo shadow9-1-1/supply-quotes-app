@@ -91,12 +91,6 @@ const waitForReactPaint = () => new Promise((resolve) => {
   requestAnimationFrame(() => requestAnimationFrame(resolve));
 });
 
-const isAppleMobileBrowser = () => {
-  if (typeof navigator === 'undefined') return false;
-  return /iPad|iPhone|iPod/.test(navigator.userAgent)
-    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-};
-
 const applyArabicExportFixes = (root) => {
   if (!root) return;
   root.setAttribute('dir', 'rtl');
@@ -389,13 +383,18 @@ function QuoteEditor({ company, initialQuote, onBack, onSave }) {
     if (!element) throw new Error(`Missing export page for ${output.name}`);
     await waitForImages(element);
 
-    const appleMobile = isAppleMobileBrowser();
-    const capture = (foreignObjectRendering) => html2canvas(element, {
-      scale: appleMobile ? 2 : 2.2,
+    // foreignObjectRendering (used to route around an old iOS-Safari-specific bug)
+    // has proven unreliable in practice: it can silently produce a blank or
+    // glyph-corrupted canvas on Safari with no thrown error to catch. The
+    // standard DOM-walking renderer is used for every device instead, now that
+    // the actual causes of Arabic text corruption (a scaled ancestor transform
+    // and a CSS Grid term layout) are fixed at the source.
+    const canvas = await html2canvas(element, {
+      scale: 2.2,
       useCORS: true,
       allowTaint: false,
       backgroundColor: '#ffffff',
-      foreignObjectRendering,
+      foreignObjectRendering: false,
       imageTimeout: 20000,
       logging: false,
       scrollX: 0,
@@ -407,15 +406,7 @@ function QuoteEditor({ company, initialQuote, onBack, onSave }) {
         applyArabicExportFixes(clonedElement);
       },
     });
-
-    let canvas;
-    try {
-      canvas = await capture(appleMobile);
-      if (!canvasHasContent(canvas)) throw new Error('Blank mobile PDF canvas');
-    } catch (captureError) {
-      console.warn('Primary PDF capture failed, retrying with the standard renderer.', captureError);
-      canvas = await capture(false);
-    }
+    if (!canvasHasContent(canvas)) throw new Error('PDF canvas rendered blank');
 
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pageWidth = 210;
