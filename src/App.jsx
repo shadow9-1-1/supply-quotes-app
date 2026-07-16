@@ -670,9 +670,9 @@ function QuoteTemplate({ meta, company, output, quote, total, isPrimary, mode = 
       </tr>)}</tbody></table>}
 
       {quote.showTotal && <div className="quote-summary"><b>قيمة المبيعات: {money(total)} جنيه</b></div>}
-      <div className="terms exact-terms" dir="rtl" lang="ar">
-        {terms.filter(Boolean).map((term, index) => <p className="term-line" key={index} dir="rtl" lang="ar">{`- ${term}`}</p>)}
-        {quote.notes && quote.notes.split('\n').filter(Boolean).map((line, index) => <p className="note-line" key={`note-${index}`} dir="rtl" lang="ar">{line}</p>)}
+      <div className="terms exact-terms">
+        {terms.filter(Boolean).map((term, index) => <p className="term-line" key={index}>{`- ${term}`}</p>)}
+        {quote.notes && quote.notes.split('\n').filter(Boolean).map((line, index) => <p className="note-line" key={`note-${index}`}>{line}</p>)}
       </div>
       {quote.date && <div className="exact-date" dir="rtl" lang="ar"><span>{output.template === 'imdad' ? 'التاريخ' : 'تحرير في'} :</span><span className="date-value" dir="ltr">{formatDate(quote.date)}</span></div>}
       {meta.signature && <div className="signature-block"><img src={meta.signature} alt="" /></div>}
