@@ -1,21 +1,27 @@
 export const MAIN_COMPANIES = {
   alex: {
     id: 'alex', name: 'AlexTrade', arabicName: 'اليكس تريد', color: '#0d3853', accent: '#00bfe5',
-    branches: [
-      { id: 'alextrade', name: 'AlexTrade', template: 'alex', direct: true },
-      { id: '3a', name: '3A / AAA', template: '3a', direct: true },
+    primary: { id: 'alextrade', name: 'AlexTrade', template: 'alex' },
+    coverages: [
+      { id: '3a', name: '3A / AAA', template: '3a' },
       { id: 'gino', name: 'Gino Trade', template: 'gino' },
     ],
   },
   imdad: {
     id: 'imdad', name: 'Imdad', arabicName: 'إمداد', color: '#244f80', accent: '#7aa0c7',
-    branches: [
-      { id: 'imdad-direct', name: 'Imdad', template: 'imdad', direct: true },
+    primary: { id: 'imdad-direct', name: 'Imdad', template: 'imdad' },
+    coverages: [
       { id: 'alwaad', name: 'الوعد', template: 'alwaad' },
       { id: 'alhamd', name: 'الحمد', template: 'alhamd' },
     ],
   },
 };
+
+Object.values(MAIN_COMPANIES).forEach((company) => {
+  company.outputs = [company.primary, ...company.coverages];
+  // Kept for compatibility with quotes saved by older versions.
+  company.branches = company.outputs;
+});
 
 export const TEMPLATE_META = {
   '3a': {
@@ -55,7 +61,7 @@ export const TEMPLATE_META = {
   },
   imdad: {
     title: 'إمداد', subtitle: 'للتوريدات الصناعية والهندسية',
-    header: '/templates/separated/imdad-header.jpg', footer: '/templates/separated/imdad-signature.jpg',
+    header: '/templates/separated/imdad-header.jpg', footer: '/templates/separated/imdad-footer.jpg', signature: null,
     greeting: '', showIndex: true,
     defaultIntroLines: ['تتشرف شركة إمداد للتوريدات الصناعية والهندسية أن تتقدم بعرض سعر التالي:'],
     defaultTerms: ['الأسعار: يضاف للأسعار ضريبة القيمة المضافة.', 'الدفع: نقداً أو بشيك لصالح شركة إمداد للتوريدات الصناعية والهندسية.', 'مدة التوريد: في خلال أسبوع من تاريخ أمر التوريد.', 'مكان التسليم: بمخازن شركتكم', 'وتفضلوا بقبول وافر الشكر والاحترام،،،'],

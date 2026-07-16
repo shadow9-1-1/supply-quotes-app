@@ -67,3 +67,71 @@
 .content-3a .exact-terms{font-size:15px;font-weight:700;margin-top:18px}
 .content-3a .exact-date{font-weight:700}
 .template-3a .quote-summary{background:#c79a00;border:1px solid #111;padding:6px 12px;margin-top:0;text-align:center}
+
+/* V5 - one master file with two coverage-company buttons */
+.main-company-grid{max-width:900px;margin-inline:auto;grid-template-columns:repeat(2,minmax(260px,1fr))}
+.coverage-switcher-card{background:#fff;border:1px solid #dce6ee;border-radius:18px;padding:18px 20px;margin-bottom:18px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px 22px;align-items:center;box-shadow:0 8px 24px rgba(20,47,72,.05)}
+.coverage-switcher-card h2{margin:4px 0}.coverage-switcher-card p{margin:0;color:#657487;line-height:1.7}.coverage-switcher-card>small{grid-column:1/-1;color:#7a8795}
+.coverage-buttons{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.coverage-buttons button{border:1px solid #bdd0dd;background:#f5f9fc;color:#173852;border-radius:12px;padding:12px 18px;font-weight:900;min-width:120px;cursor:pointer}
+.coverage-buttons button:hover,.coverage-buttons button.active{background:#102f4e;color:#fff;border-color:#102f4e;box-shadow:0 7px 18px rgba(16,47,78,.18)}
+.editing-output{display:flex;justify-content:space-between;align-items:center;background:#edf7fa;border:1px solid #cce8ef;border-radius:12px;padding:10px 12px;margin-bottom:15px}.editing-output strong{color:#0d607b}
+.coverage-editor-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;background:#f0f6fb;border:1px solid #cedeea;border-radius:12px;padding:12px;margin:10px 0}
+.coverage-editor-row label{margin:0}
+.export-pages{position:fixed;left:-12000px;top:0;width:794px;pointer-events:none;z-index:0}
+.export-pages .quote-sheet{margin:0 0 20px;box-shadow:none}
+.content-master{padding-inline:28px}.content-master .exact-table{font-size:10px}.content-master .exact-table th,.content-master .exact-table td{padding:3px 2px;height:29px}.content-master .master-quote-table th:nth-child(2){width:24%}.content-master .master-quote-table th:last-child{width:15%}
+.content-coverage{padding-inline:36px}.content-coverage .coverage-quote-table{font-size:11px}.content-coverage .coverage-quote-table th:nth-child(2){width:27%}
+@media(max-width:900px){.coverage-switcher-card{grid-template-columns:1fr}.coverage-buttons{justify-content:stretch}.coverage-buttons button{flex:1}.coverage-editor-row{grid-template-columns:1fr}.main-company-grid{grid-template-columns:1fr}}
+
+/* V6 - additive coverage rates, three-company switcher and PDF type chooser */
+.coverage-rate-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:2px 0 12px}
+.coverage-rate-card{background:#eef6fb;border:1px solid #cbdde9;border-radius:12px;padding:12px;margin:0!important}
+.coverage-rate-card input{margin-top:2px}
+.coverage-rate-card small{display:block;color:#376078;font-weight:700;line-height:1.6;margin-top:2px}
+.pdf-choice-modal{width:min(620px,100%)}
+.pdf-choice-modal .modal-head{align-items:flex-start}
+.pdf-choice-modal .modal-head p{margin:6px 0 0;color:#718095;font-size:14px}
+.pdf-choice-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pdf-choice-card{border:1px solid #d5e1ea;background:#f8fbfd;color:#173852;border-radius:15px;padding:18px;display:flex;align-items:flex-start;gap:13px;text-align:right;transition:.2s}
+.pdf-choice-card:hover{transform:translateY(-2px);border-color:#4d91b5;box-shadow:0 10px 24px rgba(27,48,72,.1)}
+.pdf-choice-card>span{display:grid;gap:5px}.pdf-choice-card b{font-size:17px}.pdf-choice-card small{color:#68798b;line-height:1.65}
+.pdf-choice-card.quote-version{background:#eef8f2;border-color:#c5dfcf;color:#17623c}
+.content-master .master-quote-table th:nth-child(2){width:28%}
+.content-coverage .coverage-quote-table th:nth-child(2){width:31%}
+.content-quote-version{padding-inline:42px}
+.content-quote-version .quote-version-table{font-size:14px}
+.content-quote-version .quote-version-table th:first-child{width:42%}
+.content-quote-version .quote-version-table th:last-child{width:25%}
+@media(max-width:700px){.coverage-rate-grid,.pdf-choice-actions{grid-template-columns:1fr}}
+.master-quote-table th.item-col{width:28%}
+.content-coverage .coverage-quote-table th.item-col{width:31%}
+.content-quote-version .quote-version-table th.item-col{width:42%}
+.content-quote-version .quote-version-table th:nth-child(2){width:13%}
+.content-quote-version .quote-version-table th:nth-child(3){width:20%}
+.content-quote-version .quote-version-table th:nth-child(4){width:25%}
+
+
+/* V7 - quote actions appear only after all form data and the preview */
+.bottom-actions-toolbar{margin:24px 0 0;background:#fff;border:1px solid #dce6ee;border-radius:18px;padding:16px 18px;box-shadow:0 8px 24px rgba(20,47,72,.06);flex-wrap:wrap}
+.bottom-actions-toolbar .toolbar-actions{margin-inline-start:auto;flex-wrap:wrap}
+@media(max-width:700px){.bottom-actions-toolbar{align-items:stretch}.bottom-actions-toolbar .back-btn{width:100%;justify-content:center}.bottom-actions-toolbar .toolbar-actions{width:100%;margin:0}.bottom-actions-toolbar .toolbar-actions button{flex:1;justify-content:center;min-width:150px}.bottom-actions-toolbar .save-status{width:100%;text-align:center}}
+
+
+/* V9 - download only the currently selected company PDF */
+.current-company-pdf{border:0;background:#6b4db8;color:#fff;border-radius:10px;padding:10px 15px;display:flex;align-items:center;gap:8px;font-weight:800;cursor:pointer}
+.current-company-pdf:hover{background:#563d99}
+
+
+/* V11 - stable Arabic shaping and RTL order in PDFs generated on iPhone/iPad */
+.dynamic-content,.dynamic-content *{letter-spacing:normal!important;word-spacing:normal!important;font-kerning:normal;font-variant-ligatures:common-ligatures contextual}
+.dynamic-content{direction:rtl!important;text-align:right}
+.rtl-text{direction:rtl!important;unicode-bidi:isolate!important;text-align:right;letter-spacing:normal!important;word-break:normal;overflow-wrap:normal}
+.client-block p,.intro-lines p,.quote-title,.exact-table th,.exact-table td{direction:rtl;unicode-bidi:isolate;letter-spacing:normal!important}
+.exact-terms .term-line{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:7px;align-items:start;direction:rtl;margin:3px 0;white-space:normal}
+.exact-terms .term-marker{grid-column:1;direction:rtl;unicode-bidi:isolate;line-height:inherit}
+.exact-terms .term-text{grid-column:2;min-width:0;white-space:pre-wrap}
+.exact-terms .note-line{direction:rtl;text-align:right;white-space:pre-wrap}
+.exact-date{display:flex;align-items:baseline;gap:5px;direction:rtl;unicode-bidi:isolate}
+.exact-date .date-value{direction:ltr;unicode-bidi:isolate;display:inline-block}
+.export-pages .quote-sheet,.export-pages .exact-sheet,.export-pages .dynamic-content{direction:rtl!important}
