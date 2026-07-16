@@ -130,6 +130,11 @@ const canvasHasContent = (canvas) => {
     const pixels = context.getImageData(0, 0, probe.width, probe.height).data;
     let nonWhiteSamples = 0;
     for (let offset = 0; offset < pixels.length; offset += 4) {
+      // A fully transparent pixel reads back as RGB (0,0,0) in most browsers,
+      // which looks like "dark content" even though nothing was drawn there
+      // (this is exactly what a failed foreignObjectRendering capture produces
+      // on Safari). Only opaque, non-white pixels count as real content.
+      if (pixels[offset + 3] === 0) continue;
       if (pixels[offset] < 245 || pixels[offset + 1] < 245 || pixels[offset + 2] < 245) {
         nonWhiteSamples += 1;
         if (nonWhiteSamples > 8) return true;
@@ -137,8 +142,11 @@ const canvasHasContent = (canvas) => {
     }
     return false;
   } catch {
-    // A browser may protect pixel reads even though the image itself is valid.
-    return true;
+    // Reading pixels back failed (e.g. Safari taints the canvas after
+    // foreignObjectRendering draws local <img> content into it). That is the
+    // same failure mode as a blank export, so don't trust this canvas -
+    // trigger the standard-renderer retry instead of silently accepting it.
+    return false;
   }
 };
 
