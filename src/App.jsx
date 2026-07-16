@@ -173,7 +173,18 @@ function QuoteEditor({ company, branch, initialQuote, onBack, onPrevious, onNext
   const save = () => { onSave({...quote, total, purchaseTotal, updatedAt: new Date().toISOString()}); setStatus('تم الحفظ'); setTimeout(() => setStatus(''), 1800); };
   const downloadPDF = async () => {
     setStatus('جاري إنشاء PDF...');
-    const canvas = await html2canvas(printRef.current, { scale: 2.2, useCORS: true, backgroundColor: '#ffffff', foreignObjectRendering: true });
+    // The responsive preview scales this sheet down via CSS transform; html2canvas
+    // mis-measures Arabic text runs when an ancestor has a non-1 transform, which
+    // joins/garbles the shaped glyphs. Neutralize it for the capture, then restore.
+    const scaleHost = printRef.current.parentElement;
+    const prevTransform = scaleHost.style.transform;
+    scaleHost.style.transform = 'none';
+    let canvas;
+    try {
+      canvas = await html2canvas(printRef.current, { scale: 2.2, useCORS: true, backgroundColor: '#ffffff' });
+    } finally {
+      scaleHost.style.transform = prevTransform;
+    }
     const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pageWidth = 210, pageHeight = 297;
