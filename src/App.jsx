@@ -680,13 +680,8 @@ function QuoteTemplate({ meta, company, output, quote, total, isPrimary, mode = 
 
       {quote.showTotal && <div className="quote-summary"><b>قيمة المبيعات: {money(total)} جنيه</b></div>}
       <div className="terms exact-terms" dir="rtl" lang="ar">
-        {terms.filter(Boolean).map((term, index) => <p className="term-line" key={index}>
-          <span className="term-marker" aria-hidden="true">-</span>
-          <span className="rtl-text term-text" dir="rtl" lang="ar">{term}</span>
-        </p>)}
-        {quote.notes && quote.notes.split('\n').filter(Boolean).map((line, index) => <p className="note-line" key={`note-${index}`}>
-          <span className="rtl-text" dir="rtl" lang="ar">{line}</span>
-        </p>)}
+        {terms.filter(Boolean).map((term, index) => <p className="term-line" key={index} dir="rtl" lang="ar">{`- ${term}`}</p>)}
+        {quote.notes && quote.notes.split('\n').filter(Boolean).map((line, index) => <p className="note-line" key={`note-${index}`} dir="rtl" lang="ar">{line}</p>)}
       </div>
       {quote.date && <div className="exact-date" dir="rtl" lang="ar"><span>{output.template === 'imdad' ? 'التاريخ' : 'تحرير في'} :</span><span className="date-value" dir="ltr">{formatDate(quote.date)}</span></div>}
       {meta.signature && <div className="signature-block"><img src={meta.signature} alt="" /></div>}

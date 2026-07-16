@@ -128,10 +128,7 @@
 .dynamic-content{direction:rtl!important;text-align:right}
 .rtl-text{direction:rtl!important;unicode-bidi:isolate!important;text-align:right;letter-spacing:normal!important;word-break:normal;overflow-wrap:normal}
 .client-block p,.intro-lines p,.quote-title,.exact-table th,.exact-table td{direction:rtl;unicode-bidi:isolate;letter-spacing:normal!important}
-.exact-terms .term-line{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:7px;align-items:start;direction:rtl;margin:3px 0;white-space:normal}
-.exact-terms .term-marker{grid-column:1;direction:rtl;unicode-bidi:isolate;line-height:inherit}
-.exact-terms .term-text{grid-column:2;min-width:0;white-space:pre-wrap}
-.exact-terms .note-line{direction:rtl;text-align:right;white-space:pre-wrap}
+.exact-terms .term-line,.exact-terms .note-line{direction:rtl;text-align:right;white-space:pre-wrap;margin:3px 0}
 .exact-date{display:flex;align-items:baseline;gap:5px;direction:rtl;unicode-bidi:isolate}
 .exact-date .date-value{direction:ltr;unicode-bidi:isolate;display:inline-block}
 .export-pages .quote-sheet,.export-pages .exact-sheet,.export-pages .dynamic-content{direction:rtl!important}
