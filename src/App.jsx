@@ -12,6 +12,15 @@ import {
   PieChart, Pie, Cell, LineChart, Line
 } from 'recharts';
 import { MAIN_COMPANIES, TEMPLATE_META } from './data/companies';
+import { isCloudSyncConfigured, loadCloudWorkspace, saveCloudWorkspace } from './cloudSync';
+
+// Shared workspace code baked in at build time. Every device that loads the
+// same deployment uses the same code, so they all read/write one Supabase
+// workspace. Must be at least 12 alphanumeric characters (see cloudSync.js).
+const SHARED_SYNC_CODE = String(import.meta.env.VITE_SHARED_SYNC_CODE || '');
+const cloudEnabled =
+  isCloudSyncConfigured &&
+  SHARED_SYNC_CODE.replace(/[^A-Za-z0-9]/g, '').length >= 12;
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const today = () => new Date().toISOString().slice(0, 10);
@@ -26,6 +35,23 @@ const saveToStorage = (key, value) => {
     console.error(`Unable to save ${key} in browser storage.`, error);
     return false;
   }
+};
+
+// The full set of records that lives in the shared cloud workspace. Read from
+// localStorage (already written by the time this runs) so the payload is fresh.
+const cloudPayload = () => ({
+  quotes: load('quotes', []),
+  expenses: load('expenses', []),
+  otherIncome: load('otherIncome', []),
+});
+
+// Push the whole workspace to Supabase. Fire-and-forget: local storage has
+// already succeeded, so a network failure never blocks the user's save.
+const pushCloud = () => {
+  if (!cloudEnabled) return;
+  saveCloudWorkspace(SHARED_SYNC_CODE, cloudPayload()).catch((error) => {
+    console.error('Cloud sync save failed.', error);
+  });
 };
 const money = (value) => Number(value || 0).toLocaleString('ar-EG', { maximumFractionDigits: 2 });
 const toNumber = (value) => Number(value || 0);
@@ -422,9 +448,40 @@ function App() {
 
   const persist = (key, value, setter) => {
     const stored = saveToStorage(key, value);
-    if (stored) setter(value);
+    if (stored) {
+      setter(value);
+      pushCloud();
+    }
     return stored;
   };
+
+  // On startup, pull the shared workspace from Supabase and treat it as the
+  // source of truth so this device shows whatever was saved elsewhere.
+  useEffect(() => {
+    if (!cloudEnabled) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const payload = await loadCloudWorkspace(SHARED_SYNC_CODE);
+        if (cancelled || !payload) return;
+        if (Array.isArray(payload.quotes)) {
+          saveToStorage('quotes', payload.quotes);
+          setQuotes(payload.quotes);
+        }
+        if (Array.isArray(payload.expenses)) {
+          saveToStorage('expenses', payload.expenses);
+          setExpenses(payload.expenses);
+        }
+        if (Array.isArray(payload.otherIncome)) {
+          saveToStorage('otherIncome', payload.otherIncome);
+          setOtherIncome(payload.otherIncome);
+        }
+      } catch (error) {
+        console.error('Cloud sync load failed.', error);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // A transfer link carries the quotation in the URL hash, so it can be
   // opened on a laptop without exposing the data to Vercel or requiring a
@@ -456,6 +513,7 @@ function App() {
         : [imported, ...currentQuotes];
       if (!saveToStorage('quotes', next)) throw new Error('Browser storage is unavailable.');
       setQuotes(next);
+      pushCloud();
       setMainCompany(company);
       setEditingQuote(imported);
       setScreen('quote');
