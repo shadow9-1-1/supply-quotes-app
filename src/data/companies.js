@@ -61,7 +61,7 @@ export const TEMPLATE_META = {
   },
   imdad: {
     title: 'إمداد', subtitle: 'للتوريدات الصناعية والهندسية',
-    header: '/templates/separated/imdad-header.jpg', footer: '/templates/separated/imdad-footer.jpg', signature: null,
+    header: '/templates/separated/imdad-header.jpg', footer: '/templates/separated/imdad-footer.jpg', signature: '/templates/separated/imdad-signature.jpg',
     greeting: '', showIndex: true,
     defaultIntroLines: ['تتشرف شركة إمداد للتوريدات الصناعية والهندسية أن تتقدم بعرض سعر التالي:'],
     defaultTerms: ['الأسعار: يضاف للأسعار ضريبة القيمة المضافة.', 'الدفع: نقداً أو بشيك لصالح شركة إمداد للتوريدات الصناعية والهندسية.', 'مدة التوريد: في خلال أسبوع من تاريخ أمر التوريد.', 'مكان التسليم: بمخازن شركتكم', 'وتفضلوا بقبول وافر الشكر والاحترام،،،'],

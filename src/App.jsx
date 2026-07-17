@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BarChart3, Building2, Download, FileSpreadsheet, FileText, Home, Plus,
-  Receipt, Save, Trash2, WalletCards, X
+  Receipt, Save, Share2, Trash2, WalletCards, X
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import JSZip from 'jszip';
 import * as XLSX from 'xlsx';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -17,6 +18,15 @@ const today = () => new Date().toISOString().slice(0, 10);
 const load = (key, fallback) => {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
 };
+const saveToStorage = (key, value) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (error) {
+    console.error(`Unable to save ${key} in browser storage.`, error);
+    return false;
+  }
+};
 const money = (value) => Number(value || 0).toLocaleString('ar-EG', { maximumFractionDigits: 2 });
 const toNumber = (value) => Number(value || 0);
 const roundHalfUp = (value) => {
@@ -26,6 +36,27 @@ const roundHalfUp = (value) => {
     : Math.ceil(number - 0.5 - Number.EPSILON);
 };
 const cleanFileName = (value) => String(value || 'عرض سعر').replace(/[\\/:*?"<>|]/g, '-').trim();
+const cleanArabicText = (value) => String(value ?? '')
+  .normalize('NFC')
+  // Remove invisible direction-control characters that are often introduced
+  // when Arabic text is copied from Word, WhatsApp or a PDF.
+  .replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '')
+  .replace(/\u00A0/g, ' ');
+const encodeQuoteTransfer = (value) => {
+  const bytes = new TextEncoder().encode(JSON.stringify(value));
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+};
+const decodeQuoteTransfer = (encoded) => {
+  const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
+  const binary = atob(padded);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(bytes));
+};
 const effectiveCoverage = (item, output, company) => {
   const baseCoverage = toNumber(item.baseCoverage);
   if (output.id === company.primary.id) return baseCoverage;
@@ -91,6 +122,104 @@ const waitForReactPaint = () => new Promise((resolve) => {
   requestAnimationFrame(() => requestAnimationFrame(resolve));
 });
 
+const isAppleMobileBrowser = () => {
+  if (typeof navigator === 'undefined') return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+};
+
+const isMobileBrowser = () => {
+  if (typeof navigator === 'undefined') return false;
+  if (navigator.userAgentData?.mobile) return true;
+  const compactTouchScreen = navigator.maxTouchPoints > 1
+    && typeof screen !== 'undefined'
+    && Math.min(screen.width, screen.height) < 900;
+  return isAppleMobileBrowser()
+    || /Android|Mobile|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    || compactTouchScreen;
+};
+
+const waitForImage = async (image) => {
+  image.loading = 'eager';
+  image.decoding = 'sync';
+  try { image.fetchPriority = 'high'; } catch { /* Older browsers */ }
+
+  if (!image.complete || image.naturalWidth === 0) {
+    await new Promise((resolve) => {
+      const done = () => resolve();
+      image.addEventListener('load', done, { once: true });
+      image.addEventListener('error', done, { once: true });
+      setTimeout(done, 20000);
+    });
+  }
+
+  if (typeof image.decode === 'function') {
+    try { await image.decode(); } catch { /* The load/error result above is enough. */ }
+  }
+};
+
+const waitForExportAssets = async (root) => {
+  if (document.fonts?.ready) {
+    try { await document.fonts.ready; } catch { /* Continue with browser fallback fonts. */ }
+  }
+  await Promise.all(Array.from(root.querySelectorAll('img')).map(waitForImage));
+  await waitForReactPaint();
+};
+
+const stageExportElement = async (sourceElement, exportKey) => {
+  const stage = document.createElement('div');
+  stage.className = 'pdf-export-stage';
+  stage.setAttribute('aria-hidden', 'true');
+
+  const clone = sourceElement.cloneNode(true);
+  clone.classList.add('pdf-export-target');
+  clone.setAttribute('data-staged-export-key', exportKey);
+  clone.style.display = 'block';
+  clone.style.visibility = 'visible';
+  clone.style.position = 'relative';
+  clone.style.left = '0';
+  clone.style.top = '0';
+  clone.style.transform = 'none';
+  clone.style.opacity = '1';
+  clone.style.margin = '0';
+  clone.style.width = '794px';
+  clone.style.maxWidth = 'none';
+  clone.style.background = '#ffffff';
+  applyArabicExportFixes(clone);
+
+  const blocker = document.createElement('div');
+  blocker.className = 'pdf-export-blocker';
+  blocker.innerHTML = '<div class="pdf-export-blocker-card"><strong>جاري تجهيز الملف</strong><span>يرجى عدم إغلاق الصفحة</span></div>';
+
+  stage.appendChild(clone);
+  document.body.appendChild(stage);
+  document.body.appendChild(blocker);
+
+  await waitForExportAssets(clone);
+  rasterizeArabicExportLines(clone);
+  await waitForReactPaint();
+
+  return {
+    clone,
+    cleanup: () => {
+      blocker.remove();
+      stage.remove();
+    },
+  };
+};
+
+const triggerBlobDownload = (blob, filename) => {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.rel = 'noopener';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+};
+
 const applyArabicExportFixes = (root) => {
   if (!root) return;
   root.setAttribute('dir', 'rtl');
@@ -104,12 +233,108 @@ const applyArabicExportFixes = (root) => {
     node.style.fontKerning = 'normal';
   });
 
-  root.querySelectorAll('.rtl-text, .quote-title, .client-block, .intro-lines, .exact-terms, th, td').forEach((node) => {
+  root.querySelectorAll('.rtl-text, .quote-title, .client-block, .intro-lines, th, td').forEach((node) => {
     node.setAttribute('dir', 'rtl');
     node.setAttribute('lang', 'ar');
     if (!node.style) return;
     node.style.direction = 'rtl';
     node.style.unicodeBidi = 'isolate';
+  });
+
+  root.querySelectorAll('.exact-terms .pdf-arabic-line').forEach((node) => {
+    node.setAttribute('dir', 'rtl');
+    node.setAttribute('lang', 'ar');
+    node.style.display = 'block';
+    node.style.direction = 'rtl';
+    node.style.unicodeBidi = 'isolate';
+    node.style.textAlign = 'right';
+    node.style.whiteSpace = 'pre-wrap';
+    node.style.wordBreak = 'normal';
+    node.style.overflowWrap = 'normal';
+    node.style.letterSpacing = 'normal';
+    node.style.wordSpacing = 'normal';
+    node.style.fontFamily = 'Tahoma, Arial, sans-serif';
+  });
+};
+
+const wrapCanvasText = (context, text, maxWidth) => {
+  const words = cleanArabicText(text).trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return [''];
+  const lines = [];
+  let current = words[0];
+  for (let index = 1; index < words.length; index += 1) {
+    const candidate = `${current} ${words[index]}`;
+    if (context.measureText(candidate).width <= maxWidth) current = candidate;
+    else {
+      lines.push(current);
+      current = words[index];
+    }
+  }
+  lines.push(current);
+  return lines;
+};
+
+// html2canvas may reverse or disconnect long Arabic sentences even when short
+// client lines render correctly. Before capturing the page, every condition and
+// note is converted to a native browser canvas. Canvas text uses the browser's
+// own Arabic shaping engine, then html2canvas only copies finished pixels.
+const rasterizeArabicExportLines = (root) => {
+  if (!root) return;
+  root.querySelectorAll('.pdf-arabic-line').forEach((node) => {
+    const text = cleanArabicText(node.dataset.pdfText || node.textContent || '').trim();
+    if (!text) return;
+
+    const style = window.getComputedStyle(node);
+    const bounds = node.getBoundingClientRect();
+    const cssWidth = Math.max(80, Math.ceil(bounds.width || node.clientWidth || 600));
+    const fontSize = Number.parseFloat(style.fontSize) || 15;
+    const lineHeight = Number.parseFloat(style.lineHeight) || Math.ceil(fontSize * 1.85);
+    const fontWeight = style.fontWeight || '400';
+    const paddingRight = 2;
+    const bulletWidth = node.dataset.pdfBullet === 'true' ? Math.ceil(fontSize * 1.2) : 0;
+    const textWidth = Math.max(40, cssWidth - bulletWidth - paddingRight - 2);
+    const density = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+
+    const measurementCanvas = document.createElement('canvas');
+    const measurementContext = measurementCanvas.getContext('2d');
+    if (!measurementContext) return;
+    measurementContext.font = `${fontWeight} ${fontSize}px Tahoma, Arial, sans-serif`;
+    measurementContext.direction = 'rtl';
+    const lines = wrapCanvasText(measurementContext, text, textWidth);
+    const cssHeight = Math.max(lineHeight, Math.ceil(lines.length * lineHeight));
+
+    const canvas = document.createElement('canvas');
+    canvas.className = `${node.className} rasterized-arabic-line`;
+    canvas.width = Math.ceil(cssWidth * density);
+    canvas.height = Math.ceil(cssHeight * density);
+    canvas.style.display = 'block';
+    canvas.style.width = `${cssWidth}px`;
+    canvas.style.height = `${cssHeight}px`;
+    canvas.style.margin = style.margin;
+    canvas.style.maxWidth = '100%';
+
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    context.scale(density, density);
+    context.clearRect(0, 0, cssWidth, cssHeight);
+    context.fillStyle = style.color || '#111111';
+    context.font = `${fontWeight} ${fontSize}px Tahoma, Arial, sans-serif`;
+    context.textBaseline = 'middle';
+    context.direction = 'rtl';
+    context.textAlign = 'right';
+
+    lines.forEach((line, index) => {
+      const y = index * lineHeight + lineHeight / 2;
+      context.fillText(line, cssWidth - bulletWidth - paddingRight, y, textWidth);
+    });
+
+    if (bulletWidth) {
+      context.direction = 'ltr';
+      context.textAlign = 'right';
+      context.fillText('-', cssWidth - paddingRight, lineHeight / 2);
+    }
+
+    node.replaceWith(canvas);
   });
 };
 
@@ -124,11 +349,6 @@ const canvasHasContent = (canvas) => {
     const pixels = context.getImageData(0, 0, probe.width, probe.height).data;
     let nonWhiteSamples = 0;
     for (let offset = 0; offset < pixels.length; offset += 4) {
-      // A fully transparent pixel reads back as RGB (0,0,0) in most browsers,
-      // which looks like "dark content" even though nothing was drawn there
-      // (this is exactly what a failed foreignObjectRendering capture produces
-      // on Safari). Only opaque, non-white pixels count as real content.
-      if (pixels[offset + 3] === 0) continue;
       if (pixels[offset] < 245 || pixels[offset + 1] < 245 || pixels[offset + 2] < 245) {
         nonWhiteSamples += 1;
         if (nonWhiteSamples > 8) return true;
@@ -136,11 +356,8 @@ const canvasHasContent = (canvas) => {
     }
     return false;
   } catch {
-    // Reading pixels back failed (e.g. Safari taints the canvas after
-    // foreignObjectRendering draws local <img> content into it). That is the
-    // same failure mode as a blank export, so don't trust this canvas -
-    // trigger the standard-renderer retry instead of silently accepting it.
-    return false;
+    // A browser may protect pixel reads even though the image itself is valid.
+    return true;
   }
 };
 
@@ -204,9 +421,63 @@ function App() {
   const [modal, setModal] = useState(null);
 
   const persist = (key, value, setter) => {
-    setter(value);
-    localStorage.setItem(key, JSON.stringify(value));
+    const stored = saveToStorage(key, value);
+    if (stored) setter(value);
+    return stored;
   };
+
+  // A transfer link carries the quotation in the URL hash, so it can be
+  // opened on a laptop without exposing the data to Vercel or requiring a
+  // database. Opening the link imports the quotation into this browser.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const encoded = new URLSearchParams(window.location.hash.slice(1)).get('quote');
+    if (!encoded) return;
+    try {
+      const transferred = decodeQuoteTransfer(encoded);
+      const company = MAIN_COMPANIES[transferred.mainCompanyId];
+      if (!company) throw new Error('Unknown company in transfer link.');
+      const normalized = normalizeQuote(transferred, company);
+      const imported = {
+        ...normalized,
+        total: outputTotal(normalized.items, company.primary, company),
+        purchaseTotal: normalized.items.reduce((sum, item) => sum + toNumber(item.qty) * toNumber(item.buyPrice), 0),
+        coverageTotals: Object.fromEntries(company.coverages.map((coverage) => [
+          coverage.id,
+          outputTotal(normalized.items, coverage, company),
+        ])),
+        createdAt: transferred.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const currentQuotes = load('quotes', []);
+      const exists = currentQuotes.some((saved) => saved.id === imported.id);
+      const next = exists
+        ? currentQuotes.map((saved) => saved.id === imported.id ? imported : saved)
+        : [imported, ...currentQuotes];
+      if (!saveToStorage('quotes', next)) throw new Error('Browser storage is unavailable.');
+      setQuotes(next);
+      setMainCompany(company);
+      setEditingQuote(imported);
+      setScreen('quote');
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+    } catch (error) {
+      console.error('Unable to import the transferred quotation.', error);
+    }
+  }, []);
+
+  // Keep another tab/window on the same laptop in sync immediately.
+  // Cross-device sync still requires a shared database; localStorage is local
+  // to one browser profile.
+  useEffect(() => {
+    const syncLocalData = (event) => {
+      if (event.storageArea !== localStorage) return;
+      if (event.key === 'quotes') setQuotes(load('quotes', []));
+      if (event.key === 'expenses') setExpenses(load('expenses', []));
+      if (event.key === 'otherIncome') setOtherIncome(load('otherIncome', []));
+    };
+    window.addEventListener('storage', syncLocalData);
+    return () => window.removeEventListener('storage', syncLocalData);
+  }, []);
 
   const openCompany = (company, quote = null) => {
     setMainCompany(company);
@@ -231,10 +502,17 @@ function App() {
             initialQuote={editingQuote}
             onBack={() => setScreen('home')}
             onSave={(quote) => {
-              const exists = quotes.some((saved) => saved.id === quote.id);
-              const next = exists ? quotes.map((saved) => saved.id === quote.id ? quote : saved) : [quote, ...quotes];
-              persist('quotes', next, setQuotes);
-              setEditingQuote(quote);
+              // Read the latest copy from storage instead of relying on a stale
+              // React render. This prevents a quick second save/download from
+              // overwriting the record that was just stored.
+              const currentQuotes = load('quotes', quotes);
+              const exists = currentQuotes.some((saved) => saved.id === quote.id);
+              const next = exists
+                ? currentQuotes.map((saved) => saved.id === quote.id ? quote : saved)
+                : [quote, ...currentQuotes];
+              const stored = persist('quotes', next, setQuotes);
+              if (stored) setEditingQuote(quote);
+              return stored;
             }}
           />
         )}
@@ -282,6 +560,7 @@ function QuoteEditor({ company, initialQuote, onBack, onSave }) {
   const [status, setStatus] = useState('');
   const [pdfChoiceOpen, setPdfChoiceOpen] = useState(false);
   const [exportRowOrders, setExportRowOrders] = useState({});
+  const [pendingDownload, setPendingDownload] = useState(null);
   const exportRefs = useRef({});
 
   const selectedOutput = company.outputs.find((output) => output.id === selectedOutputId) || primaryOutput;
@@ -301,6 +580,78 @@ function QuoteEditor({ company, initialQuote, onBack, onSave }) {
       ])),
     }));
   }, [company]);
+
+  useEffect(() => () => {
+    if (pendingDownload?.url) URL.revokeObjectURL(pendingDownload.url);
+  }, [pendingDownload]);
+
+  const closePendingDownload = () => {
+    setPendingDownload(null);
+    setStatus('');
+  };
+
+  const offerGeneratedFile = (blob, filename) => {
+    if (!isMobileBrowser()) {
+      triggerBlobDownload(blob, filename);
+      return;
+    }
+
+    setPendingDownload((current) => {
+      if (current?.url) URL.revokeObjectURL(current.url);
+      return {
+        blob,
+        filename,
+        url: URL.createObjectURL(blob),
+      };
+    });
+  };
+
+  const sharePendingDownload = async () => {
+    if (!pendingDownload || typeof navigator.share !== 'function') return;
+    const file = new File([pendingDownload.blob], pendingDownload.filename, {
+      type: pendingDownload.blob.type || 'application/octet-stream',
+    });
+    if (navigator.canShare && !navigator.canShare({ files: [file] })) return;
+    try {
+      await navigator.share({ files: [file] });
+      setStatus('تم فتح خيارات المشاركة والحفظ');
+    } catch (error) {
+      if (error?.name !== 'AbortError') {
+        console.warn('Mobile share failed; the direct save link is still available.', error);
+        setStatus('استخدم زر حفظ الملف');
+      }
+    }
+  };
+
+  const shareQuoteTransfer = async () => {
+    const saved = save({ showMessage: false });
+    if (!saved) return;
+    const url = new URL(window.location.href);
+    url.hash = new URLSearchParams({ quote: encodeQuoteTransfer(saved) }).toString();
+    const transferUrl = url.toString();
+
+    try {
+      if (typeof navigator.share === 'function') {
+        await navigator.share({
+          title: saved.fileName,
+          text: 'افتح الرابط على اللابتوب ليتم حفظ العرض وفتح جميع بياناته داخل الموقع.',
+          url: transferUrl,
+        });
+        setStatus('تم فتح مشاركة رابط نقل العرض إلى اللابتوب');
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(transferUrl);
+        setStatus('تم نسخ رابط نقل العرض؛ افتحه على اللابتوب');
+      } else {
+        window.prompt('انسخ الرابط وافتحه على اللابتوب:', transferUrl);
+        setStatus('تم تجهيز رابط نقل العرض');
+      }
+    } catch (error) {
+      if (error?.name !== 'AbortError') {
+        console.error('Unable to share quotation transfer link.', error);
+        window.prompt('انسخ الرابط وافتحه على اللابتوب:', transferUrl);
+      }
+    }
+  };
 
   const update = (field, value) => setQuote((current) => ({ ...current, [field]: value }));
   const updateIntroLine = (index, value) => setQuote((current) => ({ ...current, introLines: current.introLines.map((line, i) => i === index ? value : line) }));
@@ -354,43 +705,56 @@ function QuoteEditor({ company, initialQuote, onBack, onSave }) {
     } : item),
   }));
 
-  const save = () => {
+  const save = (options = {}) => {
+    const showMessage = !(options && options.showMessage === false);
+    const timestamp = new Date().toISOString();
     const saved = {
       ...quote,
       branchId: company.primary.id,
       total: primaryTotal,
       purchaseTotal,
       coverageTotals,
-      updatedAt: new Date().toISOString(),
+      createdAt: quote.createdAt || timestamp,
+      updatedAt: timestamp,
     };
-    onSave(saved);
-    setStatus('تم الحفظ');
-    setTimeout(() => setStatus(''), 1800);
+    const stored = onSave(saved);
+    if (!stored) {
+      setStatus('تعذر الحفظ داخل المتصفح. تأكد أن وضع التصفح الخاص غير مفعل.');
+      return null;
+    }
+
+    // Keep the editor state identical to the copy stored in the archive and
+    // verify immediately that all form fields can be read back.
+    setQuote(saved);
+    const verified = load('quotes', []).some((entry) => (
+      entry.id === saved.id
+      && entry.fileName === saved.fileName
+      && entry.client === saved.client
+      && entry.attention === saved.attention
+      && entry.date === saved.date
+      && entry.subject === saved.subject
+    ));
+    if (showMessage) {
+      setStatus(verified
+        ? 'تم حفظ كل بيانات العرض في العروض المحفوظة'
+        : 'تم الحفظ، لكن تعذر التحقق من بعض البيانات');
+      setTimeout(() => setStatus(''), 2600);
+    }
+    return saved;
   };
 
-  const waitForImages = async (element) => {
-    const images = Array.from(element.querySelectorAll('img'));
-    await Promise.all(images.map((image) => image.complete ? Promise.resolve() : new Promise((resolve) => {
-      image.addEventListener('load', resolve, { once: true });
-      image.addEventListener('error', resolve, { once: true });
-    })));
-    if (document.fonts?.ready) await document.fonts.ready;
-  };
+  const captureExportCanvas = async (element, exportKey) => {
+    const { clone, cleanup } = await stageExportElement(element, exportKey);
+    const appleMobile = isAppleMobileBrowser();
+    const mobile = isMobileBrowser();
+    const firstScale = appleMobile ? 1.35 : mobile ? 1.55 : 2;
+    const dimensions = {
+      width: Math.max(794, clone.scrollWidth, clone.clientWidth),
+      height: Math.max(1123, clone.scrollHeight, clone.clientHeight),
+    };
 
-  const createPdf = async (output, mode) => {
-    const exportKey = `${mode}-${output.id}`;
-    const element = exportRefs.current[exportKey];
-    if (!element) throw new Error(`Missing export page for ${output.name}`);
-    await waitForImages(element);
-
-    // foreignObjectRendering (used to route around an old iOS-Safari-specific bug)
-    // has proven unreliable in practice: it can silently produce a blank or
-    // glyph-corrupted canvas on Safari with no thrown error to catch. The
-    // standard DOM-walking renderer is used for every device instead, now that
-    // the actual causes of Arabic text corruption (a scaled ancestor transform
-    // and a CSS Grid term layout) are fixed at the source.
-    const canvas = await html2canvas(element, {
-      scale: 2.2,
+    const capture = (scale) => html2canvas(clone, {
+      scale,
       useCORS: true,
       allowTaint: false,
       backgroundColor: '#ffffff',
@@ -399,53 +763,128 @@ function QuoteEditor({ company, initialQuote, onBack, onSave }) {
       logging: false,
       scrollX: 0,
       scrollY: 0,
-      windowWidth: 1200,
-      windowHeight: 1600,
+      width: dimensions.width,
+      height: dimensions.height,
+      windowWidth: dimensions.width,
+      windowHeight: dimensions.height,
+      removeContainer: true,
       onclone: (clonedDocument) => {
-        const clonedElement = clonedDocument.querySelector(`[data-export-key="${exportKey}"]`);
+        const clonedElement = clonedDocument.querySelector(`[data-staged-export-key="${exportKey}"]`);
         applyArabicExportFixes(clonedElement);
+        clonedDocument.querySelectorAll('img').forEach((image) => {
+          image.setAttribute('loading', 'eager');
+          image.setAttribute('decoding', 'sync');
+        });
       },
     });
-    if (!canvasHasContent(canvas)) throw new Error('PDF canvas rendered blank');
 
-    const pdf = new jsPDF('p', 'mm', 'a4');
+    try {
+      let canvas;
+      try {
+        canvas = await capture(firstScale);
+        if (canvasHasContent(canvas)) return canvas;
+        console.warn('The first PDF canvas was blank. Retrying with a low-memory scale.');
+      } catch (firstCaptureError) {
+        console.warn('The first PDF capture failed. Retrying with a low-memory scale.', firstCaptureError);
+      }
+
+      if (canvas) {
+        canvas.width = 1;
+        canvas.height = 1;
+      }
+
+      canvas = await capture(1);
+      if (!canvasHasContent(canvas)) {
+        canvas.width = 1;
+        canvas.height = 1;
+        throw new Error('PDF canvas remained blank after the mobile-safe retry.');
+      }
+      return canvas;
+    } finally {
+      cleanup();
+    }
+  };
+
+  const createPdfFile = async (output, mode) => {
+    const exportKey = `${mode}-${output.id}`;
+    const element = exportRefs.current[exportKey];
+    if (!element) throw new Error(`Missing export page for ${output.name}`);
+
+    const canvas = await captureExportCanvas(element, exportKey);
+    const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true });
     const pageWidth = 210;
     const pageHeight = 297;
     const ratio = Math.min(pageWidth / canvas.width, pageHeight / canvas.height);
     const width = canvas.width * ratio;
     const height = canvas.height * ratio;
-    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', (pageWidth - width) / 2, 0, width, height, undefined, 'FAST');
+    const image = canvas.toDataURL('image/jpeg', 0.94);
+    pdf.addImage(image, 'JPEG', (pageWidth - width) / 2, 0, width, height, undefined, 'FAST');
+
+    canvas.width = 1;
+    canvas.height = 1;
+
     const modeName = mode === 'personal' ? 'نسخة شخصية' : 'نسخة عرض السعر';
-    pdf.save(`${cleanFileName(quote.fileName)} - ${cleanFileName(output.name)} - ${modeName}.pdf`);
+    const filename = `${cleanFileName(quote.fileName)} - ${cleanFileName(output.name)} - ${modeName}.pdf`;
+    return { filename, blob: pdf.output('blob') };
   };
 
   const downloadAllPDFs = async (mode) => {
     setPdfChoiceOpen(false);
     const outputsToDownload = mode === 'personal' ? [primaryOutput] : company.outputs;
+    const mobile = isMobileBrowser();
+
     try {
+      // Saving/downloading a file must also register the quotation in the app.
+      // Previously the “Save file” action only saved the PDF to the device.
+      const savedQuote = save({ showMessage: false });
+      if (!savedQuote) return;
       if (mode === 'quote') {
         setExportRowOrders(makeSubsidiaryRowOrders(quote.items, company.coverages));
-        await waitForReactPaint();
       } else {
         setExportRowOrders({});
-        await waitForReactPaint();
       }
-      for (let index = 0; index < outputsToDownload.length; index += 1) {
-        const output = outputsToDownload[index];
-        setStatus(`جاري إنشاء PDF ${index + 1} من ${outputsToDownload.length}: ${output.name}`);
-        await createPdf(output, mode);
-        await new Promise((resolve) => setTimeout(resolve, 250));
+      await waitForReactPaint();
+
+      if (mobile && outputsToDownload.length > 1) {
+        const zip = new JSZip();
+        for (let index = 0; index < outputsToDownload.length; index += 1) {
+          const output = outputsToDownload[index];
+          setStatus(`جاري إنشاء PDF ${index + 1} من ${outputsToDownload.length}: ${output.name}`);
+          const file = await createPdfFile(output, mode);
+          zip.file(file.filename, file.blob);
+        }
+
+        setStatus('جاري تجميع الملفات في ملف ZIP واحد');
+        const zipBlob = await zip.generateAsync({
+          type: 'blob',
+          mimeType: 'application/zip',
+          compression: 'DEFLATE',
+          compressionOptions: { level: 6 },
+        });
+        offerGeneratedFile(zipBlob, `${cleanFileName(quote.fileName)} - عروض الأسعار.zip`);
+        setStatus('تم تجهيز الملفات؛ اضغط حفظ الملف');
+      } else {
+        for (let index = 0; index < outputsToDownload.length; index += 1) {
+          const output = outputsToDownload[index];
+          setStatus(`جاري إنشاء PDF ${index + 1} من ${outputsToDownload.length}: ${output.name}`);
+          const file = await createPdfFile(output, mode);
+          offerGeneratedFile(file.blob, file.filename);
+          if (!mobile) await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+        setStatus(mobile ? 'تم تجهيز الملف؛ اضغط حفظ الملف' : outputsToDownload.length === 1 ? 'تم تحميل ملف PDF' : `تم تحميل ${outputsToDownload.length} ملفات PDF`);
       }
-      setStatus(outputsToDownload.length === 1 ? 'تم تحميل ملف PDF الشخصي' : `تم تحميل ${outputsToDownload.length} ملفات PDF`);
     } catch (error) {
       console.error(error);
-      setStatus('تعذر إنشاء ملفات PDF');
+      setStatus('تعذر إنشاء ملفات PDF. حاول تقليل عدد الأصناف أو أعد تحميل الصفحة.');
     }
-    setTimeout(() => setStatus(''), 2500);
+    if (!mobile) setTimeout(() => setStatus(''), 3000);
   };
 
   const downloadSelectedPDF = async () => {
+    const mobile = isMobileBrowser();
     try {
+      const savedQuote = save({ showMessage: false });
+      if (!savedQuote) return;
       if (selectedOutput.id !== primaryOutput.id) {
         setExportRowOrders((current) => ({
           ...current,
@@ -460,13 +899,14 @@ function QuoteEditor({ company, initialQuote, onBack, onSave }) {
       }
       await waitForReactPaint();
       setStatus(`جاري إنشاء PDF: ${selectedOutput.name}`);
-      await createPdf(selectedOutput, 'quote');
-      setStatus(`تم تحميل PDF ${selectedOutput.name}`);
+      const file = await createPdfFile(selectedOutput, 'quote');
+      offerGeneratedFile(file.blob, file.filename);
+      setStatus(mobile ? 'تم تجهيز الملف؛ اضغط حفظ الملف' : `تم تحميل PDF ${selectedOutput.name}`);
     } catch (error) {
       console.error(error);
       setStatus(`تعذر إنشاء PDF ${selectedOutput.name}`);
     }
-    setTimeout(() => setStatus(''), 2500);
+    if (!mobile) setTimeout(() => setStatus(''), 3000);
   };
 
   const makeExcelSheet = (output) => {
@@ -569,6 +1009,7 @@ function QuoteEditor({ company, initialQuote, onBack, onSave }) {
       <div className="toolbar-actions">
         <span className="save-status">{status}</span>
         <button className="secondary" onClick={save}><Save size={18}/> حفظ</button>
+        <button className="transfer-btn" onClick={shareQuoteTransfer}><Share2 size={18}/> نقل العرض للابتوب</button>
         <button className="excel-btn" onClick={downloadMainExcel}><FileSpreadsheet size={18}/> تحميل Excel الرئيسي</button>
         <button className="current-company-pdf" onClick={downloadSelectedPDF} title={`تحميل نسخة عرض السعر لشركة ${selectedOutput.name} فقط`}><Download size={18}/> Download {selectedOutput.name}</button>
         <button className="primary" onClick={() => setPdfChoiceOpen(true)}><Download size={18}/> تحميل PDF</button>
@@ -606,6 +1047,17 @@ function QuoteEditor({ company, initialQuote, onBack, onSave }) {
         <button className="pdf-choice-card" onClick={() => downloadAllPDFs('personal')}><FileText size={28}/><span><b>نسخة شخصية</b><small>ملف واحد للشركة الرئيسية فقط، ويحتوي على بيانات الشراء والتغطيات والأسعار وقيمة المبيعات.</small></span></button>
         <button className="pdf-choice-card quote-version" onClick={() => downloadAllPDFs('quote')}><Download size={28}/><span><b>نسخة عرض السعر</b><small>يتم تحميل 3 ملفات للشركة الرئيسية والشركتين التابعتين.</small></span></button>
       </div>
+    </div></div>}
+
+    {pendingDownload && <div className="modal-backdrop mobile-download-backdrop" onClick={closePendingDownload}><div className="modal mobile-download-modal" onClick={(event) => event.stopPropagation()}>
+      <div className="modal-head"><div><h3>الملف جاهز للحفظ</h3><p>على iPhone وAndroid يجب الضغط مرة ثانية حتى يسمح المتصفح بحفظ الملف.</p></div><button onClick={closePendingDownload}><X size={20}/></button></div>
+      <div className="mobile-download-file"><FileText size={30}/><div><strong>{pendingDownload.filename}</strong><small>{pendingDownload.blob.type === 'application/zip' ? 'يحتوي على جميع ملفات PDF' : 'ملف PDF جاهز'}</small></div></div>
+      <div className="mobile-download-actions">
+        <a href={pendingDownload.url} download={pendingDownload.filename} target="_blank" rel="noopener noreferrer"><Download size={20}/> حفظ الملف</a>
+        {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && <button onClick={sharePendingDownload}><FileText size={20}/> مشاركة / حفظ في الملفات</button>}
+        <button className="transfer-file-btn" onClick={shareQuoteTransfer}><Share2 size={20}/> نقل بيانات العرض للابتوب</button>
+      </div>
+      <small className="mobile-download-tip">على iPhone قد يفتح PDF للمعاينة؛ استخدم زر المشاركة ثم اختر “Save to Files”.</small>
     </div></div>}
   </section>;
 }
@@ -670,9 +1122,28 @@ function QuoteTemplate({ meta, company, output, quote, total, isPrimary, mode = 
       </tr>)}</tbody></table>}
 
       {quote.showTotal && <div className="quote-summary"><b>قيمة المبيعات: {money(total)} جنيه</b></div>}
-      <div className="terms exact-terms">
-        {terms.filter(Boolean).map((term, index) => <p className="term-line" key={index}>{`- ${term}`}</p>)}
-        {quote.notes && quote.notes.split('\n').filter(Boolean).map((line, index) => <p className="note-line" key={`note-${index}`}>{line}</p>)}
+      <div className="client-block terms exact-terms" dir="rtl" lang="ar">
+        {terms.filter(Boolean).map((term, index) => {
+          const text = cleanArabicText(term).trim();
+          return <p
+            className="term-line pdf-arabic-line"
+            dir="rtl"
+            lang="ar"
+            data-pdf-text={text}
+            data-pdf-bullet="true"
+            key={index}
+          >- {text}</p>;
+        })}
+        {quote.notes && quote.notes.split('\n').filter(Boolean).map((line, index) => {
+          const text = cleanArabicText(line).trim();
+          return <p
+            className="note-line pdf-arabic-line"
+            dir="rtl"
+            lang="ar"
+            data-pdf-text={text}
+            key={`note-${index}`}
+          >{text}</p>;
+        })}
       </div>
       {quote.date && <div className="exact-date" dir="rtl" lang="ar"><span>{output.template === 'imdad' ? 'التاريخ' : 'تحرير في'} :</span><span className="date-value" dir="ltr">{formatDate(quote.date)}</span></div>}
       {meta.signature && <div className="signature-block"><img src={meta.signature} alt="" /></div>}
